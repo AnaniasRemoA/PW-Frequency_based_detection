@@ -2,7 +2,7 @@
 
 Pixel-Wise Temporal Frequency-Based Deepfake Video Detection using deep learning.
 
-This repository contains the implementation of a frequency-aware deepfake video detection framework based on the ICCV 2025 paper **"Beyond Spatial Frequency: Pixel-wise Temporal Frequency-based Deepfake Video Detection"**. The project detects manipulated videos by analyzing pixel-wise temporal frequency information extracted from consecutive video frames.
+This repository contains the implementation of a frequency-aware deepfake video detection framework. The project detects manipulated videos by analyzing pixel-wise temporal frequency information extracted from consecutive video frames.
 
 ---
 
@@ -157,37 +157,6 @@ pip install -r requirements.txt
 
 ---
 
-## Citation
-
-If you use this project, please cite the original paper:
-
-```bibtex
-@inproceedings{zhou2025beyond,
-  title={Beyond Spatial Frequency: Pixel-wise Temporal Frequency-based Deepfake Video Detection},
-  author={Zhou, et al.},
-  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
-  year={2025}
-}
-```
-
----
-
-## Acknowledgements
-
-This implementation is based on the ICCV 2025 paper:
-
-**Beyond Spatial Frequency: Pixel-wise Temporal Frequency-based Deepfake Video Detection**
-
-Thanks to the original authors for making their research publicly available.
-
----
-
 ## Disclaimer
 
 This project is intended solely for research and educational purposes. The authors are not responsible for any misuse of this software.
-
----
-
-## License
-
-This project follows the license provided by the original repository. Please refer to the LICENSE file for more information.
