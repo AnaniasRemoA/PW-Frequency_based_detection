@@ -72,7 +72,23 @@ weights/
 
 ---
 
-## Running Inference
+## Running Web Application
+
+### 1. Start Backend (FastAPI)
+```bash
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
+
+### 2. Start Frontend (Vite + React)
+```bash
+cd frontend
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
+
+---
+
+## Running Inference (CLI)
 
 ### GPU
 

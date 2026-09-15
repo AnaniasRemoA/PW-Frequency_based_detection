@@ -1,0 +1,17 @@
+torch>=2.0.0
+numpy<2
+torchvision
+opencv-python
+pillow
+tqdm
+pyyaml
+facenet-pytorch
+filterpy
+lap
+scikit-image
+fvcore
+iopath
+yacs
+simplejson
+av
+gradio>=4.0.0

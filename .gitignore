@@ -43,7 +43,9 @@ Thumbs.db
 *.log
 
 # ==========================
-# Build / Output
+# Build / Output / Uploads
 # ==========================
 results/
 output/
+uploads/
+node_modules/
