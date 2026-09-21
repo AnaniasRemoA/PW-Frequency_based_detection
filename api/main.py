@@ -72,9 +72,12 @@ async def analyze_video(
         res["elapsed"] = elapsed
         
         # Convert absolute path to relative URL for the frontend
-        # Assuming out_file is an absolute path inside OUTPUT_DIR
         out_file_name = os.path.basename(res["out_file"])
         res["video_url"] = f"/api/video/{out_file_name}"
+        
+        if res.get("heatmap"):
+            heatmap_name = os.path.basename(res["heatmap"])
+            res["heatmap_url"] = f"/api/video/{heatmap_name}"
         
         return {"status": "success", "result": res}
 

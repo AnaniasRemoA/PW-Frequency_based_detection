@@ -87,11 +87,25 @@ const Results = () => {
 
         <div>
           <div className="section-title">Annotated Output</div>
-          <div className="glass-card" style={{ padding: '1rem' }}>
+          <div className="glass-card" style={{ padding: '1rem', marginBottom: '1.5rem' }}>
             <div className="video-container">
               <video src={`http://localhost:8000${video_url}`} controls autoPlay loop muted playsInline />
             </div>
           </div>
+
+          {result.heatmap_url && (
+            <>
+              <div className="section-title">Explainability Heatmap</div>
+              <div className="glass-card" style={{ padding: '1rem' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <img src={`http://localhost:8000${result.heatmap_url}`} alt="Grad-CAM Heatmap" style={{ maxWidth: '100%', borderRadius: '8px' }} />
+                  <p style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                    Grad-CAM highlights the spatial regions the model focused on for its decision.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

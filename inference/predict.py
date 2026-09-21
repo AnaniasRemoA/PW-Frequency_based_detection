@@ -17,7 +17,7 @@ from test_tools.utils import get_crop_box
 from test_tools.ct.operations import find_longest, multiple_tracking
 from test_tools.faster_crop_align_xray import FasterCropAlignXRay
 from model.framework import get_model
-
+from explainability import DeepfakeGradCAM, overlay_heatmap
 # The threshold used by the original SupplyWriter for fake/real labeling
 # Must match exactly what SupplyWriter uses so the web label agrees with the video annotation
 OPT_THRESHOLD = 0.002584857167676091
@@ -266,7 +266,7 @@ def predict_video(
     if not clips_for_video:
         raise ValueError("Could not extract suitable facial clips for temporal analysis.")
 
-    # ── Model inference ───────────────────────────────────────────────────────
+        # ── Model inference ───────────────────────────────────────────────────────
     preds = []
     frame_res = {}
     test_transform = Compose(
@@ -275,6 +275,10 @@ def predict_video(
 
     total_clips = len(clips_for_video)
     print(f"Running inference on {total_clips} clips...")
+    
+    max_score = -1.0
+    max_clip_tensors = None
+    max_clip_images = None
 
     for idx, clip in enumerate(clips_for_video):
         if progress_callback and idx % 5 == 0:
@@ -307,9 +311,40 @@ def predict_video(
             output = F.sigmoid(model(img_tensor, ft_tensor)).squeeze(0)
 
         pred = float(output.item())
+        
+        if pred > max_score:
+            max_score = pred
+            max_clip_tensors = (img_tensor, ft_tensor)
+            max_clip_images = images
+            
         for f_id in frame_ids:
             frame_res.setdefault(f_id, []).append(pred)
         preds.append(pred)
+        
+    # ── Explainability ───────────────────────────────────────────────────────
+    heatmap_path = None
+    if max_clip_tensors is not None:
+        if progress_callback:
+            progress_callback(0.85, desc="Generating explainability heatmap...")
+        
+        try:
+            gradcam = DeepfakeGradCAM(model)
+            img_t, ft_t = max_clip_tensors
+            heatmap = gradcam.generate_heatmap(img_t, ft_t)
+            
+            # Overlay on the middle frame of the most fake clip
+            mid_idx = len(max_clip_images) // 2
+            original_img = np.array(max_clip_images[mid_idx])
+            
+            overlayed_img = overlay_heatmap(original_img, heatmap)
+            overlayed_img_bgr = cv2.cvtColor(overlayed_img, cv2.COLOR_RGB2BGR)
+            
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            heatmap_path = os.path.join(out_dir, base_name + "_heatmap.jpg")
+            cv2.imwrite(heatmap_path, overlayed_img_bgr)
+            print(f"Explainability heatmap saved to {heatmap_path}")
+        except Exception as e:
+            print(f"Failed to generate heatmap: {e}")
 
     # ── Aggregate & classify ─────────────────────────────────────────────────
     mean_pred = float(np.mean(preds))
@@ -344,6 +379,7 @@ def predict_video(
 
     return {
         "out_file": web_out,
+        "heatmap": heatmap_path,
         "label": label,
         "confidence": mean_pred,
         "fake_prob_pct": fake_prob_pct,
