@@ -1,26 +1,40 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Shield, Activity } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import Home from './pages/Home';
 import Analyze from './pages/Analyze';
 import Results from './pages/Results';
 
 const Navbar = () => {
   const location = useLocation();
+  const [deviceInfo, setDeviceInfo] = React.useState('System Ready');
+  
+  React.useEffect(() => {
+    fetch('http://localhost:8000/api/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.cuda_available) {
+          setDeviceInfo(`GPU · ${data.device_name || 'CUDA'}`);
+        } else {
+          setDeviceInfo('CPU · Torch');
+        }
+      })
+      .catch(() => {
+        setDeviceInfo('Offline');
+      });
+  }, []);
   
   return (
     <nav className="navbar">
       <Link to="/" className="logo-link">
-        <Shield className="logo-icon" color="#818cf8" fill="rgba(129, 140, 248, 0.2)" />
+        <Shield className="logo-icon" size={20} />
         <span className="logo-text">DeepGuard</span>
       </Link>
       
       <div className="nav-links">
         <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Home</Link>
         <Link to="/analyze" className={`nav-link ${location.pathname === '/analyze' ? 'active' : ''}`}>Analyze</Link>
-        <div className="status-badge">
-          <Activity size={14} /> GPU · CUDA
-        </div>
+        <div className="status-badge">{deviceInfo}</div>
       </div>
     </nav>
   );
@@ -30,13 +44,7 @@ const App = () => {
   return (
     <BrowserRouter>
       <div className="app-container">
-        <div className="bg-blobs">
-          <div className="blob-1"></div>
-          <div className="blob-2"></div>
-        </div>
-        
         <Navbar />
-        
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Home />} />

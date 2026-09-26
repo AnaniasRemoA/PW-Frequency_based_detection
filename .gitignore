@@ -49,3 +49,5 @@ results/
 output/
 uploads/
 node_modules/
+frontend/test-results/
+frontend/test-results-enhanced/

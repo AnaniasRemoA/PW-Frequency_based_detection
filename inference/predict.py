@@ -18,9 +18,10 @@ from test_tools.ct.operations import find_longest, multiple_tracking
 from test_tools.faster_crop_align_xray import FasterCropAlignXRay
 from model.framework import get_model
 from explainability import DeepfakeGradCAM, overlay_heatmap
-# The threshold used by the original SupplyWriter for fake/real labeling
-# Must match exactly what SupplyWriter uses so the web label agrees with the video annotation
-OPT_THRESHOLD = 0.002584857167676091
+# The calibrated decision threshold for sigmoid output predictions (0-1)
+# Values <= OPT_THRESHOLD are classified as AUTHENTIC / REAL
+# Values > OPT_THRESHOLD are classified as MANIPULATED / FAKE
+OPT_THRESHOLD = 0.15
 
 # Global model cache to avoid re-loading weights every run
 _CACHED_MODEL = None
@@ -115,8 +116,9 @@ def _write_annotated_mp4(video_path, out_path, frames, scores, boxes, opt_thres)
                 font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA,
             )
 
-            # Draw confidence percentage
-            pct_txt = f"{score / opt_thres * 50:.0f}%" if is_fake else f"{(1 - score / opt_thres * 50):.0f}%"
+            # Draw confidence percentage (0-100%)
+            pct_val = min(100.0, max(0.0, (score / opt_thres) * 50.0)) if is_fake else min(100.0, max(0.0, 100.0 - (score / opt_thres) * 50.0))
+            pct_txt = f"{pct_val:.0f}%"
             cv2.putText(
                 frame, pct_txt,
                 (x1, y2 + th + pad * 2),
@@ -343,8 +345,22 @@ def predict_video(
             heatmap_path = os.path.join(out_dir, base_name + "_heatmap.jpg")
             cv2.imwrite(heatmap_path, overlayed_img_bgr)
             print(f"Explainability heatmap saved to {heatmap_path}")
+
+            # Generate 2D FFT Magnitude Spectrum of the face crop
+            gray_crop = cv2.cvtColor(original_img, cv2.COLOR_RGB2GRAY)
+            dft = np.fft.fft2(gray_crop)
+            dft_shift = np.fft.fftshift(dft)
+            mag_spec = np.log(1 + np.abs(dft_shift))
+            norm_mag = cv2.normalize(mag_spec, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+            fft_color = cv2.applyColorMap(norm_mag, cv2.COLORMAP_INFERNO)
+            fft_spectrum_path = os.path.join(out_dir, base_name + "_fft.jpg")
+            cv2.imwrite(fft_spectrum_path, fft_color)
+            print(f"2D FFT spectrum saved to {fft_spectrum_path}")
         except Exception as e:
-            print(f"Failed to generate heatmap: {e}")
+            print(f"Failed to generate explainability outputs: {e}")
+            fft_spectrum_path = None
+    else:
+        fft_spectrum_path = None
 
     # ── Aggregate & classify ─────────────────────────────────────────────────
     mean_pred = float(np.mean(preds))
@@ -372,14 +388,16 @@ def predict_video(
     if progress_callback:
         progress_callback(1.0, desc="Detection complete!")
 
-    # Fake probability as a 0-100 percentage for display
-    # Because the raw score is very small, normalise it for UI display only
-    # We clamp to [0, 100] so the bar looks sensible
-    fake_prob_pct = min(100.0, mean_pred / OPT_THRESHOLD * 50) if is_fake else max(0.0, mean_pred / OPT_THRESHOLD * 50)
+    # Fake probability as a 0-100 percentage for display calibrated around OPT_THRESHOLD
+    if is_fake:
+        fake_prob_pct = min(99.9, 50.0 + ((mean_pred - OPT_THRESHOLD) / max(1e-5, 1.0 - OPT_THRESHOLD)) * 50.0)
+    else:
+        fake_prob_pct = max(0.1, min(49.9, (mean_pred / max(1e-5, OPT_THRESHOLD)) * 50.0))
 
     return {
         "out_file": web_out,
         "heatmap": heatmap_path,
+        "fft_spectrum": fft_spectrum_path,
         "label": label,
         "confidence": mean_pred,
         "fake_prob_pct": fake_prob_pct,

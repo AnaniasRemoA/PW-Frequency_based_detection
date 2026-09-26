@@ -16,7 +16,6 @@ class DeepfakeGradCAM:
             raise ValueError(f"Could not find target layer: {target_layer_name}")
             
         target_layer.register_forward_hook(self._save_activation)
-        target_layer.register_full_backward_hook(self._save_gradient)
         
         # Disable gradients for model_ft to prevent custom autograd bug
         for param in self.model.model_ft.parameters():
@@ -29,16 +28,16 @@ class DeepfakeGradCAM:
         return None
         
     def _save_activation(self, module, input, output):
-        if isinstance(output, list) or isinstance(output, tuple):
+        if isinstance(output, (list, tuple)):
             self.activations = output[0]
         else:
             self.activations = output
             
-    def _save_gradient(self, module, grad_input, grad_output):
-        if isinstance(grad_output, tuple) or isinstance(grad_output, list):
-            self.gradients = grad_output[0]
-        else:
-            self.gradients = grad_output
+        if hasattr(self.activations, "requires_grad") and self.activations.requires_grad:
+            self.activations.register_hook(self._save_tensor_gradient)
+
+    def _save_tensor_gradient(self, grad):
+        self.gradients = grad
 
     def generate_heatmap(self, img_tensor, ft_tensor):
         """
@@ -49,34 +48,30 @@ class DeepfakeGradCAM:
         Returns:
             heatmap (numpy array of shape (H, W)): Values in [0, 1]
         """
-        self.model.eval()
-        self.model.zero_grad()
-        
-        # Ensure img_tensor requires grad for backprop
-        if not img_tensor.requires_grad:
-            img_tensor.requires_grad_(True)
+        with torch.enable_grad():
+            self.model.eval()
+            self.model.zero_grad()
             
-        # Forward pass
-        output = self.model(img_tensor, ft_tensor)
-        
-        # Backward pass
-        if output.dim() == 2 and output.shape[1] == 1:
-            output.backward(torch.ones_like(output))
-        else:
-            output.backward(torch.ones_like(output))
+            # Ensure img_tensor requires grad for backprop
+            img_tensor = img_tensor.clone().detach().requires_grad_(True)
+            ft_tensor = ft_tensor.clone().detach().requires_grad_(False)
+                
+            # Forward pass
+            output = self.model(img_tensor, ft_tensor)
             
-        # self.gradients: [B, C, T, H', W']
-        # self.activations: [B, C, T, H', W']
-        
-        # Global average pooling over spatial and temporal dimensions
-        # Pool across T, H', W'
-        weights = torch.mean(self.gradients, dim=(2, 3, 4), keepdim=True)
-        
-        # Weight the activations
-        cam = (weights * self.activations).sum(dim=1, keepdim=True)
-        
-        # Apply ReLU
-        cam = F.relu(cam)
+            # Backward pass
+            output.sum().backward()
+                
+            # self.gradients: [B, C, T, H', W']
+            # self.activations: [B, C, T, H', W']
+            if self.gradients is not None:
+                weights = torch.mean(self.gradients, dim=(2, 3, 4), keepdim=True)
+                cam = (weights * self.activations).sum(dim=1, keepdim=True)
+            else:
+                cam = torch.mean(self.activations.abs(), dim=1, keepdim=True)
+            
+            # Apply ReLU
+            cam = F.relu(cam)
         
         # Mean across temporal dimension to get a single spatial heatmap
         cam = cam.mean(dim=2)  # shape: [B, 1, H', W']
